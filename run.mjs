@@ -27,4 +27,3 @@ if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `stat
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `## GatekeeperQA: ${status}\n\nDownload the report artifact for element locations and guidance. Automated checks do not certify accessibility conformance.\n`);
 // The composite action uploads evidence first, then enforces this code.
 console.log(`GatekeeperQA action: ${status}`);
-

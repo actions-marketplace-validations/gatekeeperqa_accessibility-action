@@ -28,7 +28,7 @@ jobs:
           artifact-name: accessibility-reports
 ```
 
-The release reference above is the planned first release; do not use it until published. Prefer pinning the reviewed release commit SHA.
+Prefer pinning the reviewed release commit SHA instead of a movable tag. See Releases for available versions.
 
 ## Results and limits
 

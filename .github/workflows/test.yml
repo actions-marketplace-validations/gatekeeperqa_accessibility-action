@@ -1,0 +1,66 @@
+name: Verify standalone Action
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/playwright/cli.js install --with-deps chromium
+      - run: npm test
+  composite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Start fixture
+        run: |
+          node tests/server.mjs &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4319/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - uses: ./
+        id: passing
+        with:
+          config: tests/pass.json
+          artifact-name: passing
+      - uses: ./
+        id: failing
+        continue-on-error: true # Expected negative fixture only.
+        with:
+          config: tests/fail.json
+          artifact-name: failing
+      - uses: ./
+        id: invalid
+        continue-on-error: true # Expected negative fixture only.
+        with:
+          config: tests/invalid.json
+          artifact-name: invalid
+      - name: Assert gate outcomes
+        env:
+          PASS: ${{ steps.passing.outputs.status }}
+          FAIL: ${{ steps.failing.outputs.status }}
+          ERROR: ${{ steps.invalid.outputs.status }}
+          FAIL_OUTCOME: ${{ steps.failing.outcome }}
+          ERROR_OUTCOME: ${{ steps.invalid.outcome }}
+        run: |
+          test "$PASS" = PASS
+          test "$FAIL" = FAIL
+          test "$ERROR" = ERROR
+          test "$FAIL_OUTCOME" = failure
+          test "$ERROR_OUTCOME" = failure

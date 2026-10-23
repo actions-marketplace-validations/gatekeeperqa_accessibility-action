@@ -1,0 +1,59 @@
+name: GatekeeperQA Accessibility Evidence
+description: Run accessibility checks with the GatekeeperQA CLI and preserve reports before enforcing quality gates.
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  config:
+    description: Configuration file relative to the checked-out workspace
+    default: gatekeeperqa.json
+  artifact-name:
+    description: Unique report artifact name for this invocation
+    default: gatekeeperqa-reports
+outputs:
+  status:
+    description: PASS, WARN, FAIL, or ERROR
+    value: ${{ steps.scan.outputs.status }}
+  exit-code:
+    description: CLI result (0, 1, or 2)
+    value: ${{ steps.scan.outputs.exit-code }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: '24'
+    - name: Install pinned scanner
+      shell: bash
+      env:
+        GK_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        cd "$GK_ACTION_PATH"
+        npm ci --ignore-scripts --no-audit --no-fund
+        node node_modules/playwright/cli.js install --with-deps chromium
+    - name: Scan
+      id: scan
+      shell: bash
+      env:
+        GK_ACTION_PATH: ${{ github.action_path }}
+        GK_CONFIG: ${{ inputs.config }}
+      run: node "$GK_ACTION_PATH/run.mjs"
+    - name: Save evidence
+      if: ${{ always() && steps.scan.outputs.report-path != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.scan.outputs.report-path }}
+        retention-days: 7
+        if-no-files-found: error
+    - name: Enforce result
+      if: ${{ always() }}
+      shell: bash
+      env:
+        GK_EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+      run: |
+        case "$GK_EXIT_CODE" in
+          0) exit 0 ;;
+          1) echo 'Accessibility gate failed. Review the report artifact.'; exit 1 ;;
+          *) echo 'Scanner did not complete successfully.'; exit 2 ;;
+        esac
